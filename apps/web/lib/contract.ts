@@ -1,10 +1,9 @@
 import type { CreateTradeInput, Trade } from "@/types/trade";
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:3000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${path}`, {
+  const res = await fetch(`${API_URL}${path}`, {
     ...init,
     headers: { "Content-Type": "application/json", ...init?.headers },
   });
@@ -43,28 +42,25 @@ export async function buildCreateTradeTx(
   return unsignedXdr;
 }
 
-export async function submitSignedTx(signedXdr: string): Promise<string> {
-  const { txHash } = await apiFetch<{ txHash: string }>("/api/trades/submit", {
+export interface SubmitTradeResult {
+  txHash: string;
+  tradeId?: number;
+}
+
+export async function submitSignedTx(signedXdr: string): Promise<SubmitTradeResult> {
+  return apiFetch<SubmitTradeResult>("/api/trades/submit", {
     method: "POST",
     body: JSON.stringify({ signedXdr }),
   });
-  return txHash;
 }
 
-/**
- * NOTE: the backend API spec only documents /api/trades/build + /submit for
- * trade creation. confirm_receipt / cancel_trade / open_dispute need their own
- * "build unsigned XDR" endpoints — the paths below follow the same REST
- * convention but aren't confirmed against the real backend. Adjust once the
- * actual routes are known.
- */
 export async function buildConfirmReceiptTx(
   tradeId: number,
   buyer: string
 ): Promise<string> {
   const { unsignedXdr } = await apiFetch<{ unsignedXdr: string }>(
-    `/api/trades/${tradeId}/confirm/build`,
-    { method: "POST", body: JSON.stringify({ buyer }) }
+    "/api/trades/confirm",
+    { method: "POST", body: JSON.stringify({ tradeId, buyer }) }
   );
   return unsignedXdr;
 }
@@ -74,8 +70,8 @@ export async function buildCancelTradeTx(
   caller: string
 ): Promise<string> {
   const { unsignedXdr } = await apiFetch<{ unsignedXdr: string }>(
-    `/api/trades/${tradeId}/cancel/build`,
-    { method: "POST", body: JSON.stringify({ caller }) }
+    "/api/trades/cancel",
+    { method: "POST", body: JSON.stringify({ tradeId, caller }) }
   );
   return unsignedXdr;
 }
@@ -85,8 +81,8 @@ export async function buildOpenDisputeTx(
   buyer: string
 ): Promise<string> {
   const { unsignedXdr } = await apiFetch<{ unsignedXdr: string }>(
-    `/api/trades/${tradeId}/dispute/build`,
-    { method: "POST", body: JSON.stringify({ buyer }) }
+    "/api/trades/dispute",
+    { method: "POST", body: JSON.stringify({ tradeId, buyer }) }
   );
   return unsignedXdr;
 }

@@ -5,48 +5,94 @@ import { useRouter } from "next/navigation";
 import { Input, Textarea } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { useWallet } from "@/lib/wallet-context";
+import { useToast } from "@/components/Toast";
 import { signXdr } from "@/lib/freighter";
 import { buildCreateTradeTx, submitSignedTx } from "@/lib/contract";
-import { amountToStroops } from "@/lib/stellar";
+import { amountToStroops, isValidStellarAddress, USDC_CONTRACT } from "@/lib/stellar";
+
+function tomorrowDateString(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+interface FormErrors {
+  seller?: string;
+  amount?: string;
+  deadline?: string;
+  item?: string;
+}
 
 export function CreateTradeForm() {
   const router = useRouter();
-  const { address, connect } = useWallet();
+  const { address } = useWallet();
+  const toast = useToast();
 
   const [seller, setSeller] = useState("");
-  const [token, setToken] = useState("");
   const [amount, setAmount] = useState("");
   const [deadline, setDeadline] = useState("");
   const [item, setItem] = useState("");
+  const [errors, setErrors] = useState<FormErrors>({});
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+
+  function validate(): FormErrors {
+    const next: FormErrors = {};
+
+    if (!seller.trim()) {
+      next.seller = "Seller address is required.";
+    } else if (!isValidStellarAddress(seller.trim())) {
+      next.seller = "Enter a valid Stellar address (starts with G, 56 characters).";
+    } else if (address && seller.trim() === address) {
+      next.seller = "Seller can't be the same as your connected wallet.";
+    }
+
+    const amountNum = Number(amount);
+    if (!amount) {
+      next.amount = "Amount is required.";
+    } else if (Number.isNaN(amountNum) || amountNum <= 0) {
+      next.amount = "Amount must be greater than 0.";
+    }
+
+    if (!deadline) {
+      next.deadline = "Deadline is required.";
+    } else if (new Date(deadline).getTime() <= Date.now()) {
+      next.deadline = "Deadline must be in the future.";
+    }
+
+    if (!item.trim()) {
+      next.item = "Item description is required.";
+    }
+
+    return next;
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    setError(null);
 
-    if (!address) {
-      await connect();
-      return;
-    }
+    if (!address) return;
+
+    const validationErrors = validate();
+    setErrors(validationErrors);
+    if (Object.keys(validationErrors).length > 0) return;
 
     setIsSubmitting(true);
     try {
       const deadlineUnix = Math.floor(new Date(deadline).getTime() / 1000);
       const unsignedXdr = await buildCreateTradeTx({
         buyer: address,
-        seller,
-        token,
+        seller: seller.trim(),
+        token: USDC_CONTRACT,
         amount: amountToStroops(amount),
         deadline: deadlineUnix,
-        item,
+        item: item.trim(),
       });
       const signedXdr = await signXdr(unsignedXdr, { address });
-      await submitSignedTx(signedXdr);
-      router.push("/trades");
+      const { tradeId } = await submitSignedTx(signedXdr);
+      toast.success("Trade created — funds locked in escrow.");
+      router.push(tradeId !== undefined ? `/trades/${tradeId}` : "/trades");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create trade");
+      toast.error(err instanceof Error ? err.message : "Failed to create trade");
     } finally {
       setIsSubmitting(false);
     }
@@ -60,33 +106,29 @@ export function CreateTradeForm() {
         placeholder="G..."
         value={seller}
         onChange={(e) => setSeller(e.target.value)}
-        required
-      />
-      <Input
-        id="token"
-        label="Token contract address"
-        placeholder="C..."
-        value={token}
-        onChange={(e) => setToken(e.target.value)}
+        error={errors.seller}
         required
       />
       <Input
         id="amount"
-        label="Amount"
+        label="Amount (USDC)"
         type="number"
         step="0.0000001"
         min="0"
         placeholder="100.00"
         value={amount}
         onChange={(e) => setAmount(e.target.value)}
+        error={errors.amount}
         required
       />
       <Input
         id="deadline"
         label="Deadline"
-        type="datetime-local"
+        type="date"
+        min={tomorrowDateString()}
         value={deadline}
         onChange={(e) => setDeadline(e.target.value)}
+        error={errors.deadline}
         required
       />
       <Textarea
@@ -96,13 +138,12 @@ export function CreateTradeForm() {
         rows={3}
         value={item}
         onChange={(e) => setItem(e.target.value)}
+        error={errors.item}
         required
       />
 
-      {error && <p className="text-sm text-danger">{error}</p>}
-
       <Button type="submit" isLoading={isSubmitting} className="mt-2 w-full">
-        {address ? "Create Trade" : "Connect Wallet to Continue"}
+        Create Trade
       </Button>
     </form>
   );

@@ -9,6 +9,7 @@ export interface Trade {
   deadline: number; // unix timestamp
   status: TradeStatus;
   item: string; // item description
+  txHash?: string; // funding transaction hash, if available
 }
 
 export interface CreateTradeInput {

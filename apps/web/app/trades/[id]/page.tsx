@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { TradeStatus } from "@/components/trade/TradeStatus";
 import { Countdown } from "@/components/trade/Countdown";
 import { useWallet } from "@/lib/wallet-context";
+import { useToast } from "@/components/Toast";
 import { signXdr } from "@/lib/freighter";
 import {
   getTrade,
@@ -16,18 +17,29 @@ import {
   buildOpenDisputeTx,
   submitSignedTx,
 } from "@/lib/contract";
-import { formatAmount, formatDeadline, shortenAddress } from "@/lib/stellar";
+import {
+  formatAmount,
+  formatDeadline,
+  shortenAddress,
+  stellarExpertTxUrl,
+} from "@/lib/stellar";
 import type { Trade } from "@/types/trade";
 
 type ActionKind = "confirm" | "cancel" | "dispute" | null;
 
+const ACTION_LABEL: Record<Exclude<ActionKind, null>, string> = {
+  confirm: "Receipt confirmed — funds released to seller.",
+  cancel: "Trade cancelled.",
+  dispute: "Dispute opened.",
+};
+
 export default function TradeDetailPage({ params }: { params: { id: string } }) {
   const tradeId = Number(params.id);
   const { address, connect } = useWallet();
+  const toast = useToast();
 
   const [trade, setTrade] = useState<Trade | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<ActionKind>(null);
 
   const refresh = useCallback(() => {
@@ -41,22 +53,22 @@ export default function TradeDetailPage({ params }: { params: { id: string } }) 
   }, [refresh]);
 
   async function runAction(
-    kind: ActionKind,
+    kind: Exclude<ActionKind, null>,
     build: () => Promise<string>
   ) {
     if (!address) {
       await connect();
       return;
     }
-    setActionError(null);
     setPendingAction(kind);
     try {
       const unsignedXdr = await build();
       const signedXdr = await signXdr(unsignedXdr, { address });
       await submitSignedTx(signedXdr);
+      toast.success(ACTION_LABEL[kind]);
       refresh();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : `Failed to ${kind} trade`);
+      toast.error(err instanceof Error ? err.message : `Failed to ${kind} trade`);
     } finally {
       setPendingAction(null);
     }
@@ -90,7 +102,6 @@ export default function TradeDetailPage({ params }: { params: { id: string } }) 
 
   const isBuyer = address === trade.buyer;
   const isSeller = address === trade.seller;
-  const isParty = isBuyer || isSeller;
   const canAct = trade.status === "Funded";
 
   return (
@@ -124,35 +135,47 @@ export default function TradeDetailPage({ params }: { params: { id: string } }) 
               value={<Countdown deadline={trade.deadline} />}
               mono
             />
+            {trade.txHash && (
+              <Row
+                label="Transaction"
+                value={
+                  <a
+                    href={stellarExpertTxUrl(trade.txHash)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-accent hover:underline"
+                  >
+                    {shortenAddress(trade.txHash)} ↗
+                  </a>
+                }
+                mono
+              />
+            )}
           </CardBody>
 
-          {isParty && canAct && (
+          {isBuyer && canAct && (
             <CardFooter className="flex-wrap">
-              {isBuyer && (
-                <Button
-                  variant="primary"
-                  className="flex-1"
-                  isLoading={pendingAction === "confirm"}
-                  disabled={pendingAction !== null}
-                  onClick={() =>
-                    runAction("confirm", () => buildConfirmReceiptTx(trade.id, trade.buyer))
-                  }
-                >
-                  ✓ Confirm Receipt
-                </Button>
-              )}
-              {isBuyer && (
-                <Button
-                  variant="danger"
-                  isLoading={pendingAction === "dispute"}
-                  disabled={pendingAction !== null}
-                  onClick={() =>
-                    runAction("dispute", () => buildOpenDisputeTx(trade.id, trade.buyer))
-                  }
-                >
-                  ⚑ Dispute
-                </Button>
-              )}
+              <Button
+                variant="primary"
+                className="flex-1"
+                isLoading={pendingAction === "confirm"}
+                disabled={pendingAction !== null}
+                onClick={() =>
+                  runAction("confirm", () => buildConfirmReceiptTx(trade.id, trade.buyer))
+                }
+              >
+                ✓ Confirm Receipt
+              </Button>
+              <Button
+                variant="danger"
+                isLoading={pendingAction === "dispute"}
+                disabled={pendingAction !== null}
+                onClick={() =>
+                  runAction("dispute", () => buildOpenDisputeTx(trade.id, trade.buyer))
+                }
+              >
+                ⚑ Open Dispute
+              </Button>
               <Button
                 variant="secondary"
                 isLoading={pendingAction === "cancel"}
@@ -167,12 +190,16 @@ export default function TradeDetailPage({ params }: { params: { id: string } }) 
           )}
         </Card>
 
-        {!address && canAct && (
+        {!isBuyer && isSeller && canAct && (
           <p className="mt-4 text-sm text-muted">
-            Connect the buyer or seller wallet to manage this trade.
+            Waiting on the buyer to confirm receipt, cancel, or open a dispute.
           </p>
         )}
-        {actionError && <p className="mt-4 text-sm text-danger">{actionError}</p>}
+        {!address && canAct && (
+          <p className="mt-4 text-sm text-muted">
+            Connect the buyer wallet to manage this trade.
+          </p>
+        )}
       </section>
 
       <Footer />

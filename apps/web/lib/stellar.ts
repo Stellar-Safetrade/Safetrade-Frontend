@@ -62,6 +62,16 @@ export function formatCountdown(remaining: TimeRemaining): string {
   return `${remaining.minutes}m ${remaining.seconds}s`;
 }
 
+export const USDC_CONTRACT =
+  process.env.NEXT_PUBLIC_USDC_CONTRACT ??
+  "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5";
+
+const STELLAR_ADDRESS_RE = /^G[A-Z2-7]{55}$/;
+
+export function isValidStellarAddress(address: string): boolean {
+  return STELLAR_ADDRESS_RE.test(address);
+}
+
 export const STELLAR_NETWORK =
   process.env.NEXT_PUBLIC_STELLAR_NETWORK ?? "TESTNET";
 
@@ -70,3 +80,8 @@ export const HORIZON_URL =
 
 export const SOROBAN_RPC_URL =
   process.env.NEXT_PUBLIC_SOROBAN_RPC_URL ?? "https://soroban-testnet.stellar.org";
+
+export function stellarExpertTxUrl(txHash: string): string {
+  const network = STELLAR_NETWORK.toLowerCase();
+  return `https://stellar.expert/explorer/${network}/tx/${txHash}`;
+}

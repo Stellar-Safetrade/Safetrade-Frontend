@@ -1,9 +1,15 @@
+"use client";
+
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Card, CardBody } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 import { CreateTradeForm } from "@/components/trade/CreateTradeForm";
+import { useWallet } from "@/lib/wallet-context";
 
 export default function NewTradePage() {
+  const { isConnected, isConnecting, connect } = useWallet();
+
   return (
     <>
       <Navbar />
@@ -20,11 +26,25 @@ export default function NewTradePage() {
           </p>
         </div>
 
-        <Card>
-          <CardBody>
-            <CreateTradeForm />
-          </CardBody>
-        </Card>
+        {isConnected ? (
+          <Card>
+            <CardBody>
+              <CreateTradeForm />
+            </CardBody>
+          </Card>
+        ) : (
+          <Card>
+            <CardBody className="flex flex-col items-center gap-4 py-16 text-center">
+              <p className="text-sm text-muted">
+                Connect your wallet to create a trade. You&apos;ll be the buyer and sign the
+                escrow transaction.
+              </p>
+              <Button onClick={connect} isLoading={isConnecting}>
+                Connect Wallet
+              </Button>
+            </CardBody>
+          </Card>
+        )}
       </section>
 
       <Footer />

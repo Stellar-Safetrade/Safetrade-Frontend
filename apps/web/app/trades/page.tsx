@@ -1,16 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { TradeCard } from "@/components/trade/TradeCard";
+import { useWallet } from "@/lib/wallet-context";
 import { listTrades } from "@/lib/contract";
-import type { Trade } from "@/types/trade";
+import { clsx } from "@/lib/clsx";
+import type { Trade, TradeStatus } from "@/types/trade";
+
+type FilterTab = "All" | TradeStatus | "Mine";
+
+const STATUS_TABS: FilterTab[] = ["All", "Funded", "Completed", "Disputed", "Cancelled"];
 
 export default function TradesPage() {
+  const { address } = useWallet();
   const [trades, setTrades] = useState<Trade[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<FilterTab>("All");
 
   useEffect(() => {
     listTrades()
@@ -18,12 +26,24 @@ export default function TradesPage() {
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load trades"));
   }, []);
 
+  const tabs = useMemo<FilterTab[]>(
+    () => (address ? [...STATUS_TABS, "Mine"] : STATUS_TABS),
+    [address]
+  );
+
+  const filtered = useMemo(() => {
+    if (!trades) return trades;
+    if (tab === "All") return trades;
+    if (tab === "Mine") return trades.filter((t) => t.buyer === address || t.seller === address);
+    return trades.filter((t) => t.status === tab);
+  }, [trades, tab, address]);
+
   return (
     <>
       <Navbar />
 
       <section className="mx-auto max-w-[1100px] px-6 py-16 md:px-12">
-        <div className="mb-10 flex flex-wrap items-center justify-between gap-4">
+        <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div>
             <div className="mb-2 font-mono text-[11px] font-bold uppercase tracking-[2px] text-accent">
               Marketplace
@@ -36,6 +56,23 @@ export default function TradesPage() {
           >
             + New Trade
           </Link>
+        </div>
+
+        <div className="mb-10 flex flex-wrap gap-2 border-b border-border pb-4">
+          {tabs.map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={clsx(
+                "rounded-full px-4 py-2 text-[13px] font-semibold transition-colors",
+                tab === t
+                  ? "bg-accent text-background"
+                  : "border border-border text-muted hover:border-muted hover:text-text"
+              )}
+            >
+              {t === "Mine" ? "My Trades" : t}
+            </button>
+          ))}
         </div>
 
         {error && (
@@ -52,19 +89,25 @@ export default function TradesPage() {
           </div>
         )}
 
-        {trades !== null && trades.length === 0 && !error && (
+        {filtered !== null && filtered.length === 0 && !error && (
           <div className="rounded-2xl border border-border bg-card px-6 py-16 text-center text-muted">
-            No trades yet. Be the first to{" "}
-            <Link href="/trades/new" className="text-accent hover:underline">
-              start one
-            </Link>
-            .
+            {tab === "All" ? (
+              <>
+                No trades yet. Be the first to{" "}
+                <Link href="/trades/new" className="text-accent hover:underline">
+                  start one
+                </Link>
+                .
+              </>
+            ) : (
+              `No ${tab === "Mine" ? "trades for your wallet" : tab.toLowerCase() + " trades"} right now.`
+            )}
           </div>
         )}
 
-        {trades && trades.length > 0 && (
+        {filtered && filtered.length > 0 && (
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {trades.map((trade) => (
+            {filtered.map((trade) => (
               <TradeCard key={trade.id} trade={trade} />
             ))}
           </div>

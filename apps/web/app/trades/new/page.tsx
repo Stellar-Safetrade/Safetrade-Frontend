@@ -1,14 +1,21 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { CreateTradeForm } from "@/components/trade/CreateTradeForm";
 import { useWallet } from "@/lib/wallet-context";
+import { isBackendReachable } from "@/lib/contract";
 
 export default function NewTradePage() {
   const { isConnected, isConnecting, connect } = useWallet();
+  const [demoMode, setDemoMode] = useState(false);
+
+  useEffect(() => {
+    isBackendReachable().then((reachable) => setDemoMode(!reachable));
+  }, []);
 
   return (
     <>
@@ -25,6 +32,13 @@ export default function NewTradePage() {
             gets paid once you confirm receipt.
           </p>
         </div>
+
+        {demoMode && (
+          <div className="mb-6 rounded-xl border border-accent/30 bg-accent/5 px-4 py-3 text-xs font-medium text-accent">
+            Demo mode: Backend API not deployed yet. Transactions will be enabled once the
+            API is live.
+          </div>
+        )}
 
         {isConnected ? (
           <Card>

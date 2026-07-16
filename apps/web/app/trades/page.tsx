@@ -7,6 +7,7 @@ import { Footer } from "@/components/layout/Footer";
 import { TradeCard } from "@/components/trade/TradeCard";
 import { useWallet } from "@/lib/wallet-context";
 import { listTrades } from "@/lib/contract";
+import { MOCK_TRADES } from "@/lib/mock-trades";
 import { clsx } from "@/lib/clsx";
 import type { Trade, TradeStatus } from "@/types/trade";
 
@@ -18,11 +19,15 @@ export default function TradesPage() {
   const { address } = useWallet();
   const [trades, setTrades] = useState<Trade[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [demoMode, setDemoMode] = useState(false);
   const [tab, setTab] = useState<FilterTab>("All");
 
   useEffect(() => {
     listTrades()
-      .then(setTrades)
+      .then((t) => {
+        setTrades(t);
+        setDemoMode(t === MOCK_TRADES);
+      })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load trades"));
   }, []);
 
@@ -78,6 +83,12 @@ export default function TradesPage() {
         {error && (
           <div className="rounded-xl border border-danger/30 bg-danger/5 px-6 py-4 text-sm text-danger">
             {error}
+          </div>
+        )}
+
+        {demoMode && (
+          <div className="mb-6 rounded-xl border border-accent/30 bg-accent/5 px-4 py-3 text-xs font-medium text-accent">
+            Showing demo data — the SafeTrade backend isn&apos;t deployed yet.
           </div>
         )}
 

@@ -1,12 +1,25 @@
 import type { CreateTradeInput, Trade } from "@/types/trade";
+import { MOCK_TRADES } from "./mock-trades";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 
+export class BackendUnavailableError extends Error {
+  constructor() {
+    super("The SafeTrade backend API is not deployed yet.");
+    this.name = "BackendUnavailableError";
+  }
+}
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      ...init,
+      headers: { "Content-Type": "application/json", ...init?.headers },
+    });
+  } catch {
+    throw new BackendUnavailableError();
+  }
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     throw new Error(`Request to ${path} failed (${res.status}): ${body}`);
@@ -24,12 +37,27 @@ export async function getTrade(id: number): Promise<Trade> {
 }
 
 export async function listTrades(): Promise<Trade[]> {
-  const count = await getTradeCount();
-  const ids = Array.from({ length: count }, (_, i) => i);
-  const results = await Promise.allSettled(ids.map((id) => getTrade(id)));
-  return results
-    .filter((r): r is PromiseFulfilledResult<Trade> => r.status === "fulfilled")
-    .map((r) => r.value);
+  try {
+    const count = await getTradeCount();
+    const ids = Array.from({ length: count }, (_, i) => i);
+    const results = await Promise.allSettled(ids.map((id) => getTrade(id)));
+    return results
+      .filter((r): r is PromiseFulfilledResult<Trade> => r.status === "fulfilled")
+      .map((r) => r.value);
+  } catch (err) {
+    if (err instanceof BackendUnavailableError) return MOCK_TRADES;
+    throw err;
+  }
+}
+
+/** Resolves false only when the API is unreachable (not deployed / no server) — a real HTTP error still counts as "reachable". */
+export async function isBackendReachable(): Promise<boolean> {
+  try {
+    await getTradeCount();
+    return true;
+  } catch (err) {
+    return !(err instanceof BackendUnavailableError);
+  }
 }
 
 export async function buildCreateTradeTx(

@@ -9,6 +9,7 @@ import { TradeStatus } from "@/components/trade/TradeStatus";
 import { Countdown } from "@/components/trade/Countdown";
 import { useWallet } from "@/lib/wallet-context";
 import { useToast } from "@/components/Toast";
+import { BackendUnavailableModal } from "@/components/BackendUnavailableModal";
 import { signXdr } from "@/lib/freighter";
 import {
   getTrade,
@@ -16,7 +17,9 @@ import {
   buildCancelTradeTx,
   buildOpenDisputeTx,
   submitSignedTx,
+  BackendUnavailableError,
 } from "@/lib/contract";
+import { MOCK_TRADES } from "@/lib/mock-trades";
 import {
   formatAmount,
   formatDeadline,
@@ -41,11 +44,26 @@ export default function TradeDetailPage({ params }: { params: { id: string } }) 
   const [trade, setTrade] = useState<Trade | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<ActionKind>(null);
+  const [demoMode, setDemoMode] = useState(false);
+  const [backendModalOpen, setBackendModalOpen] = useState(false);
 
   const refresh = useCallback(() => {
     getTrade(tradeId)
-      .then(setTrade)
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load trade"));
+      .then((t) => {
+        setTrade(t);
+        setDemoMode(false);
+      })
+      .catch((err) => {
+        if (err instanceof BackendUnavailableError) {
+          const mock = MOCK_TRADES.find((t) => t.id === tradeId);
+          if (mock) {
+            setTrade(mock);
+            setDemoMode(true);
+            return;
+          }
+        }
+        setError(err instanceof Error ? err.message : "Failed to load trade");
+      });
   }, [tradeId]);
 
   useEffect(() => {
@@ -68,7 +86,11 @@ export default function TradeDetailPage({ params }: { params: { id: string } }) 
       toast.success(ACTION_LABEL[kind]);
       refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : `Failed to ${kind} trade`);
+      if (err instanceof BackendUnavailableError) {
+        setBackendModalOpen(true);
+      } else {
+        toast.error(err instanceof Error ? err.message : `Failed to ${kind} trade`);
+      }
     } finally {
       setPendingAction(null);
     }
@@ -100,8 +122,8 @@ export default function TradeDetailPage({ params }: { params: { id: string } }) 
     );
   }
 
-  const isBuyer = address === trade.buyer;
-  const isSeller = address === trade.seller;
+  const isBuyer = demoMode ? Boolean(address) : address === trade.buyer;
+  const isSeller = demoMode ? false : address === trade.seller;
   const canAct = trade.status === "Funded";
 
   return (
@@ -115,6 +137,13 @@ export default function TradeDetailPage({ params }: { params: { id: string } }) 
           </div>
           <h1 className="text-[32px] font-bold tracking-[-1px] md:text-[40px]">{trade.item}</h1>
         </div>
+
+        {demoMode && (
+          <div className="mb-6 rounded-xl border border-accent/30 bg-accent/5 px-4 py-3 text-xs font-medium text-accent">
+            Demo trade — the SafeTrade backend isn&apos;t deployed yet. Actions below will
+            explain what&apos;s needed instead of executing a real transaction.
+          </div>
+        )}
 
         <Card>
           <CardHeader>
@@ -203,6 +232,11 @@ export default function TradeDetailPage({ params }: { params: { id: string } }) 
       </section>
 
       <Footer />
+
+      <BackendUnavailableModal
+        open={backendModalOpen}
+        onClose={() => setBackendModalOpen(false)}
+      />
     </>
   );
 }

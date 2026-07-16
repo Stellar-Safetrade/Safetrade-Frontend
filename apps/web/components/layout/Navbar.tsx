@@ -6,8 +6,6 @@ import { useWallet } from "@/lib/wallet-context";
 import { shortenAddress } from "@/lib/stellar";
 import { Button } from "@/components/ui/Button";
 
-const GITHUB_URL = "https://github.com/GenesisPray/safetrade-contract";
-
 const navLinks = [
   { href: "/#how-it-works", label: "How it works" },
   { href: "/trades", label: "Trades" },
@@ -48,16 +46,6 @@ export function Navbar() {
               </Link>
             </li>
           ))}
-          <li>
-            <a
-              href={GITHUB_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm font-medium text-muted transition-colors hover:text-text"
-            >
-              GitHub
-            </a>
-          </li>
         </ul>
 
         <div className="flex items-center gap-3">
@@ -113,17 +101,6 @@ export function Navbar() {
               </Link>
             </li>
           ))}
-          <li>
-            <a
-              href={GITHUB_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => setMenuOpen(false)}
-              className="block rounded-lg px-3 py-2.5 text-sm font-medium text-muted transition-colors hover:bg-surface hover:text-text"
-            >
-              GitHub
-            </a>
-          </li>
         </ul>
       )}
     </nav>

@@ -31,8 +31,8 @@ export function Navbar() {
   return (
     <nav className="sticky top-0 z-50 border-b border-border bg-background/90 backdrop-blur-md">
       <div className="flex items-center justify-between px-6 py-5 md:px-12">
-        <Link href="/" className="font-mono text-xl font-bold tracking-tight text-text">
-          Safe<span className="text-accent">Trade</span>
+        <Link href="/" className="flex items-center">
+          <img src="/logo.png" alt="SafeTrade" className="h-8 w-auto" />
         </Link>
 
         <ul className="hidden gap-8 md:flex">
